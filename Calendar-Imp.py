@@ -1,5 +1,6 @@
 from datetime import datetime
 
+# --- Refactoring: Replace Conditional with Polymorphism ---
 class Event:
     """
     Represents a calendar event, with:
@@ -24,10 +25,23 @@ class Event:
         if description is not None:
             self.description = description
 
+    def matches_title(self, title):
+        return self.title == title  # CHANGED: Added for polymorphic title matching
+
     def __str__(self):
         return (f"Event(title='{self.title}', "
                 f"start={self.start_time}, end={self.end_time}, "
                 f"description='{self.description}')")
+
+
+# --- Refactoring: Extract Class (Abstract Factory) ---
+class EventFactory:  # CHANGED: Extracted class for event creation (Abstract Factory)
+    def create_event(self, title, start_time, end_time, description=""):
+        raise NotImplementedError
+
+class DefaultEventFactory(EventFactory):  # CHANGED: Extracted class for event creation (Concrete implementation)
+    def create_event(self, title, start_time, end_time, description=""):
+        return Event(title, start_time, end_time, description)
 
 
 class Calendar:
@@ -35,9 +49,10 @@ class Calendar:
     A calendar that holds multiple Event objects.
     User can add, remove, update events.
     """
-    def __init__(self, name):
+    def __init__(self, name, event_factory=None):  # CHANGED: Added event_factory parameter
         self.name = name
         self.events = []
+        self.event_factory = event_factory if event_factory is not None else DefaultEventFactory()  # CHANGED: Set default event factory
 
     def add_event(self, event):
         """Adds an Event object to the list."""
@@ -49,7 +64,7 @@ class Calendar:
         Returns True if an event was removed, False otherwise.
         """
         for i, evt in enumerate(self.events):
-            if evt.title == event_title:
+            if evt.matches_title(event_title):  # CHANGED: Use polymorphic matching
                 del self.events[i]
                 return True
         return False
@@ -60,7 +75,7 @@ class Calendar:
         Returns True if found and updated, False otherwise.
         """
         for evt in self.events:
-            if evt.title == event_title:
+            if evt.matches_title(event_title):  # CHANGED: Use polymorphic matching
                 evt.update_event(**update_fields)
                 return True
         return False
@@ -84,8 +99,12 @@ class User:
         """
         if calendar_name in self.calendars:
             return False
-        self.calendars[calendar_name] = Calendar(calendar_name)
+        new_cal = self.factory_create_calendar(calendar_name)  # CHANGED: Using factory method
+        self.calendars[calendar_name] = new_cal
         return True
+
+    def factory_create_calendar(self, calendar_name):  # CHANGED: Factory Method implementation for Calendar creation
+        return Calendar(calendar_name)
 
     def remove_calendar(self, calendar_name):
         """
@@ -243,7 +262,8 @@ def user_menu(user):
                 except ValueError:
                     print("Invalid date/time format. Please use YYYY-MM-DD HH:MM.")
                     continue
-                new_event = Event(title, start_dt, end_dt, description)
+                # CHANGED: Using EventFactory (Abstract Factory) to create event
+                new_event = calendar.event_factory.create_event(title, start_dt, end_dt, description)
                 calendar.add_event(new_event)
                 print(f"Event '{title}' added to calendar '{cal_name}'.")
         elif choice == "5":
